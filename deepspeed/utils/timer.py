@@ -5,19 +5,19 @@
 
 import time
 from numpy import mean
-from deepspeed.utils.logging import log_dist
+from deepspeed.utils.logging import log_dist, print_csv_dist
 from deepspeed.accelerator import get_accelerator
 
-FORWARD_MICRO_TIMER = 'fwd_microstep'
-FORWARD_GLOBAL_TIMER = 'fwd'
-BACKWARD_MICRO_TIMER = 'bwd_microstep'
-BACKWARD_GLOBAL_TIMER = 'bwd'
-BACKWARD_INNER_MICRO_TIMER = 'bwd_inner_microstep'
-BACKWARD_INNER_GLOBAL_TIMER = 'bwd_inner'
-BACKWARD_REDUCE_MICRO_TIMER = 'bwd_allreduce_microstep'
-BACKWARD_REDUCE_GLOBAL_TIMER = 'bwd_allreduce'
-STEP_MICRO_TIMER = 'step_microstep'
-STEP_GLOBAL_TIMER = 'step'
+FORWARD_MICRO_TIMER = "fwd_microstep"
+FORWARD_GLOBAL_TIMER = "fwd"
+BACKWARD_MICRO_TIMER = "bwd_microstep"
+BACKWARD_GLOBAL_TIMER = "bwd"
+BACKWARD_INNER_MICRO_TIMER = "bwd_inner_microstep"
+BACKWARD_INNER_GLOBAL_TIMER = "bwd_inner"
+BACKWARD_REDUCE_MICRO_TIMER = "bwd_allreduce_microstep"
+BACKWARD_REDUCE_GLOBAL_TIMER = "bwd_allreduce"
+STEP_MICRO_TIMER = "step_microstep"
+STEP_GLOBAL_TIMER = "step"
 TIME_EPSILON = 1e-6
 
 try:
@@ -31,7 +31,9 @@ except ImportError:
 
 class CudaEventTimer(object):
 
-    def __init__(self, start_event: get_accelerator().Event, end_event: get_accelerator().Event):
+    def __init__(
+        self, start_event: get_accelerator().Event, end_event: get_accelerator().Event
+    ):
         self.start_event = start_event
         self.end_event = end_event
 
@@ -87,7 +89,9 @@ class SynchronizedWallClockTimer:
             if self.use_host_timer:
                 self.elapsed_records = [et * 1000.0 for et in self.event_timers]
             else:
-                self.elapsed_records = [et.get_elapsed_msec() for et in self.event_timers]
+                self.elapsed_records = [
+                    et.get_elapsed_msec() for et in self.event_timers
+                ]
             self.event_timers.clear()
             return sum(self.elapsed_records)
 
@@ -131,24 +135,51 @@ class SynchronizedWallClockTimer:
 
     @staticmethod
     def memory_usage():
-        alloc = "mem_allocated: {:.4f} GB".format(get_accelerator().memory_allocated() / (1024 * 1024 * 1024))
-        max_alloc = "max_mem_allocated: {:.4f} GB".format(get_accelerator().max_memory_allocated() /
-                                                          (1024 * 1024 * 1024))
-        cache = "cache_allocated: {:.4f} GB".format(get_accelerator().memory_cached() / (1024 * 1024 * 1024))
-        max_cache = "max_cache_allocated: {:.4f} GB".format(get_accelerator().max_memory_cached() /
-                                                            (1024 * 1024 * 1024))
+        alloc = "mem_allocated: {:.4f} GB".format(
+            get_accelerator().memory_allocated() / (1024 * 1024 * 1024)
+        )
+        max_alloc = "max_mem_allocated: {:.4f} GB".format(
+            get_accelerator().max_memory_allocated() / (1024 * 1024 * 1024)
+        )
+        cache = "cache_allocated: {:.4f} GB".format(
+            get_accelerator().memory_cached() / (1024 * 1024 * 1024)
+        )
+        max_cache = "max_cache_allocated: {:.4f} GB".format(
+            get_accelerator().max_memory_cached() / (1024 * 1024 * 1024)
+        )
         return " | {} | {} | {} | {}".format(alloc, max_alloc, cache, max_cache)
 
-    def log(self, names, normalizer=1.0, reset=True, memory_breakdown=False, ranks=None):
+    def log(
+        self, names, normalizer=1.0, reset=True, memory_breakdown=False, ranks=None
+    ):
         """Log a group of timers."""
         assert normalizer > 0.0
         string = f"time (ms)"
         for name in names:
             if name in self.timers:
-                elapsed_time = (self.timers[name].elapsed(reset=reset) / normalizer)
+                elapsed_time = self.timers[name].elapsed(reset=reset) / normalizer
                 string += " | {}: {:.2f}".format(name, elapsed_time)
 
         log_dist(string, ranks=ranks or [0])
+
+    def log_csv(
+        self,
+        names,
+        normalizer=1.0,
+        reset=True,
+        memory_breakdown=False,
+        ranks=None,
+        path="log.csv",
+    ):
+        """Log a group of timers."""
+        assert normalizer > 0.0
+        log_message = {}
+        for name in names:
+            if name in self.timers:
+                elapsed_time = self.timers[name].elapsed(reset=reset) / normalizer
+                log_message[name] = f"{elapsed_time:.2f}"
+
+        print_csv_dist(log_message, ranks=ranks or [0], path=path)
 
     def get_mean(self, names, normalizer=1.0, reset=True):
         """Get the mean of a group of timers."""
@@ -156,7 +187,7 @@ class SynchronizedWallClockTimer:
         means = {}
         for name in names:
             if name in self.timers:
-                elapsed_time = (self.timers[name].mean() * 1000.0 / normalizer)
+                elapsed_time = self.timers[name].mean() * 1000.0 / normalizer
                 means[name] = elapsed_time
         return means
 
@@ -165,14 +196,11 @@ class NoopTimer:
 
     class Timer:
 
-        def start(self):
-            ...
+        def start(self): ...
 
-        def reset(self):
-            ...
+        def reset(self): ...
 
-        def stop(self, **kwargs):
-            ...
+        def stop(self, **kwargs): ...
 
         def elapsed(self, **kwargs):
             return 0
@@ -189,17 +217,26 @@ class NoopTimer:
     def get_timers(self):
         return {}
 
-    def log(self, names, normalizer=1.0, reset=True, memory_breakdown=False, ranks=None):
-        ...
+    def log(
+        self, names, normalizer=1.0, reset=True, memory_breakdown=False, ranks=None
+    ): ...
 
-    def get_mean(self, names, normalizer=1.0, reset=True):
-        ...
+    def get_mean(self, names, normalizer=1.0, reset=True): ...
 
 
 class ThroughputTimer:
 
-    def __init__(self, config, batch_size, start_step=2, steps_per_output=50, monitor_memory=False, logging_fn=None):
+    def __init__(
+        self,
+        config,
+        batch_size,
+        start_step=2,
+        steps_per_output=50,
+        monitor_memory=False,
+        logging_fn=None,
+    ):
         from deepspeed.utils import logger
+
         self.config = config
         self.start_time = 0
         self.end_time = 0
@@ -265,18 +302,23 @@ class ThroughputTimer:
                             self.avg_samples_per_sec(),
                             self.batch_size / (self.step_elapsed_time + TIME_EPSILON),
                             round(get_accelerator().memory_allocated() / 1024**3, 2),
-                            round(get_accelerator().max_memory_allocated() / 1024**3, 2),
-                        ))
+                            round(
+                                get_accelerator().max_memory_allocated() / 1024**3, 2
+                            ),
+                        )
+                    )
                     if self.monitor_memory:
                         virt_mem = psutil.virtual_memory()
                         swap = psutil.swap_memory()
-                        self.logging("epoch={}/micro_step={}/global_step={}, vm %: {}, swap %: {}".format(
-                            self.epoch_count,
-                            self.micro_step_count,
-                            self.global_step_count,
-                            virt_mem.percent,
-                            swap.percent,
-                        ))
+                        self.logging(
+                            "epoch={}/micro_step={}/global_step={}, vm %: {}, swap %: {}".format(
+                                self.epoch_count,
+                                self.micro_step_count,
+                                self.global_step_count,
+                                virt_mem.percent,
+                                swap.percent,
+                            )
+                        )
                 self.step_elapsed_time = 0
 
     def avg_samples_per_sec(self):
@@ -305,4 +347,4 @@ def trim_mean(data, trim_percent):
         return 0
     data.sort()
     k = int(round(n * (trim_percent)))
-    return mean(data[k:n - k])
+    return mean(data[k : n - k])

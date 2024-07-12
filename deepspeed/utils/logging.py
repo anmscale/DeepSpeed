@@ -26,6 +26,7 @@ class LoggerFactory:
         Args:
             name (str): name of the logger
             level: level of logger
+            log_file (str): path to the log file
 
         Raises:
             ValueError is name is None
@@ -34,19 +35,24 @@ class LoggerFactory:
         if name is None:
             raise ValueError("name for logger cannot be None")
 
-        formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] "
-                                      "[%(filename)s:%(lineno)d:%(funcName)s] %(message)s")
+        formatter = logging.Formatter(
+            "[%(asctime)s] [%(levelname)s] "
+            "[%(filename)s:%(lineno)d:%(funcName)s] %(message)s"
+        )
 
         logger_ = logging.getLogger(name)
         logger_.setLevel(level)
         logger_.propagate = False
+
         ch = logging.StreamHandler(stream=sys.stdout)
         ch.setLevel(level)
         ch.setFormatter(formatter)
         logger_.addHandler(ch)
+
         return logger_
 
 
+# Update the logger creation to include a log file
 logger = LoggerFactory.create_logger(name="DeepSpeed", level=logging.INFO)
 
 
@@ -72,8 +78,9 @@ def print_configuration(args, name):
         logger.info("  {} {} {}".format(arg, dots, getattr(args, arg)))
 
 
-def log_dist(message, ranks=None, level=logging.INFO):
+def log_dist(message, ranks=None, level=logging.INFO, to_file=False):
     from deepspeed import comm as dist
+
     """Log message when one of following condition meets
 
     + not dist.is_initialized()
@@ -98,6 +105,7 @@ def log_dist(message, ranks=None, level=logging.INFO):
 
 def print_json_dist(message, ranks=None, path=None):
     from deepspeed import comm as dist
+
     """Print message when one of following condition meets
 
     + not dist.is_initialized()
@@ -116,11 +124,44 @@ def print_json_dist(message, ranks=None, path=None):
         should_log = ranks[0] == -1
         should_log = should_log or (my_rank in set(ranks))
     if should_log:
-        message['rank'] = my_rank
+        message["rank"] = my_rank
         import json
-        with open(path, 'w') as outfile:
+
+        with open(path, "w") as outfile:
             json.dump(message, outfile)
             os.fsync(outfile)
+
+
+def print_csv_dist(message, ranks=None, path=None):
+    from deepspeed import comm as dist
+
+    """Print message to a CSV file when one of following condition meets
+
+    + not dist.is_initialized()
+    + dist.get_rank() in ranks if ranks is not None or ranks = [-1]
+
+    Args:
+        message (dict)
+        ranks (list)
+        path (str)
+    """
+    should_log = not dist.is_initialized()
+    ranks = ranks or []
+    my_rank = dist.get_rank() if dist.is_initialized() else -1
+    if ranks and not should_log:
+        should_log = ranks[0] == -1
+        should_log = should_log or (my_rank in set(ranks))
+    if should_log:
+        import csv
+        message["rank"] = my_rank
+        fieldnames = list(message.keys())
+        file_exists = os.path.isfile(path)
+        with open(path, "a", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(message)
+            os.fsync(csvfile.fileno())
 
 
 def get_current_level():

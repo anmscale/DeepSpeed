@@ -2209,7 +2209,7 @@ class DeepSpeedEngine(Module):
 
         if self.wall_clock_breakdown():
             # Log micro timing and reset
-            self.timers.log(names=self.engine_timers.micro_timers, memory_breakdown=self.memory_breakdown())
+            self.timers.log_csv(names=self.engine_timers.micro_timers, memory_breakdown=self.memory_breakdown(), path="micro_timers.csv")
 
         if self.wall_clock_breakdown() or self.flops_profiler_enabled():
             # Log global timing and reset
@@ -2221,7 +2221,7 @@ class DeepSpeedEngine(Module):
                     fwd_time = self.timers(FORWARD_GLOBAL_TIMER).elapsed(reset=False)
                     self.print_forward_breakdown(fwd_time=fwd_time)
 
-                self.timers.log(self.engine_timers.global_timers)
+                self.timers.log_csv(self.engine_timers.global_timers, path="global_timers.csv")
 
         self.micro_steps += 1
         see_memory_usage("Engine after step", force=self.memory_breakdown())
