@@ -78,7 +78,7 @@ def print_configuration(args, name):
         logger.info("  {} {} {}".format(arg, dots, getattr(args, arg)))
 
 
-def log_dist(message, ranks=None, level=logging.INFO, to_file=False):
+def log_dist(message, ranks=None, level=logging.INFO):
     from deepspeed import comm as dist
 
     """Log message when one of following condition meets
