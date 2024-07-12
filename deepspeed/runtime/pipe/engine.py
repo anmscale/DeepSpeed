@@ -3,6 +3,7 @@
 
 # DeepSpeed Team
 
+import os
 from types import MethodType
 from collections import OrderedDict
 
@@ -402,12 +403,15 @@ class PipelineEngine(DeepSpeedEngine):
             self.monitor.write_events(self.summary_events)
 
         if self.wall_clock_breakdown() and self.global_steps % self.steps_per_print() == 0:
-            self.timers.log([
+            path = os.path.join(self._config.monitor_config.csv_monitor.output_path, 
+                                self._config.monitor_config.csv_monitor.job_name, 
+                                "comm_logs.csv")
+            self.timers.log_csv([
                 PIPE_SEND_OUTPUT_TIMER,
                 PIPE_SEND_GRAD_TIMER,
                 PIPE_RECV_INPUT_TIMER,
                 PIPE_RECV_GRAD_TIMER,
-            ])
+            ], path=path)
 
         # TODO: should return precisely what loss returned and allow others to be queried?
         return self.agg_train_loss
@@ -1249,22 +1253,28 @@ class PipelineEngine(DeepSpeedEngine):
             self.timers(STEP_MICRO_TIMER).stop()
             self.timers(STEP_GLOBAL_TIMER).stop()
             if self.global_steps % self.steps_per_print() == 0:
-                self.timers.log([
+                path = os.path.join(self._config.monitor_config.csv_monitor.output_path, 
+                                    self._config.monitor_config.csv_monitor.job_name, 
+                                    "micro_log.csv")
+                self.timers.log_csv([
                     BATCH_INPUT_TIMER,
                     FORWARD_MICRO_TIMER,
                     BACKWARD_MICRO_TIMER,
                     BACKWARD_INNER_MICRO_TIMER,
                     BACKWARD_REDUCE_MICRO_TIMER,
                     STEP_MICRO_TIMER,
-                ])
+                ], path=path)
             if self.global_steps % self.steps_per_print() == 0:
-                self.timers.log([
+                path = os.path.join(self._config.monitor_config.csv_monitor.output_path, 
+                                    self._config.monitor_config.csv_monitor.job_name, 
+                                    "global_log.csv")
+                self.timers.log_csv([
                     FORWARD_GLOBAL_TIMER,
                     BACKWARD_GLOBAL_TIMER,
                     BACKWARD_INNER_GLOBAL_TIMER,
                     BACKWARD_REDUCE_GLOBAL_TIMER,
                     STEP_GLOBAL_TIMER,
-                ])
+                ], path=path)
 
     def _allocate_zeros(self, shape, **kwargs):
         """ Allocate a tensor of zeros on the engine's device.
